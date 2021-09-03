@@ -13,10 +13,17 @@ extension Date {
 var statusBarStyle = UIApplication.shared.statusBarStyle
 
 public class SwiftAdd2CalendarPlugin: NSObject, FlutterPlugin {
+    var statusEvent : FlutterEventChannel?
+    var statusStreamHandler = EventStatusStreamHandler()
+    
+    public init(with registrar: FlutterPluginRegistrar) {
+        statusEvent = FlutterEventChannel(name: "event_status", binaryMessenger: registrar.messenger())
+        statusEvent?.setStreamHandler(statusStreamHandler)
+    }
     
     public static func register(with registrar: FlutterPluginRegistrar) {
       let channel = FlutterMethodChannel(name: "add_2_calendar", binaryMessenger: registrar.messenger())
-      let instance = SwiftAdd2CalendarPlugin()
+      let instance = SwiftAdd2CalendarPlugin(with: registrar)
       registrar.addMethodCallDelegate(instance, channel: channel)
     }
 
@@ -78,7 +85,6 @@ public class SwiftAdd2CalendarPlugin: NSObject, FlutterPlugin {
                     )
                     event.recurrenceRules = [recurrenceRule]
                 }
-                
                 self?.presentCalendarModalToAddEvent(event, eventStore: eventStore, completion: completion)
             } else {
                 completion?(false)
@@ -136,7 +142,9 @@ public class SwiftAdd2CalendarPlugin: NSObject, FlutterPlugin {
             root.present(eventModalVC, animated: true, completion: {
                 statusBarStyle = UIApplication.shared.statusBarStyle
                 UIApplication.shared.statusBarStyle = UIStatusBarStyle.default
+                print("root is Editing - ",root.isEditing)
             })
+            print("root - ",root)
         }
     }
 }
@@ -144,9 +152,34 @@ public class SwiftAdd2CalendarPlugin: NSObject, FlutterPlugin {
 extension SwiftAdd2CalendarPlugin: EKEventEditViewDelegate {
     
     public func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
+        if(action == EKEventEditViewAction.saved){
+            print("Event saved")
+            statusStreamHandler.changeStatus(value: true)
+        } else if (action == .canceled){
+            print("Event canceled")
+            statusStreamHandler.changeStatus(value: false)
+        }
+        
         controller.dismiss(animated: true, completion: {
             UIApplication.shared.statusBarStyle = statusBarStyle
         })
+    }
+}
+
+class EventStatusStreamHandler: NSObject, FlutterStreamHandler {
+    private var _status: FlutterEventSink?
+    func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+        _status = events
+        return nil
+    }
+    
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        _status = nil
+        return nil
+    }
+    
+    func changeStatus(value : Bool){
+        _status?(value)
     }
 }
 
